@@ -1,9 +1,9 @@
 package by.javaguru.jdmik12.bookingservice.controllers;
 
-import by.javaguru.jdmik12.bookingservice.model.BookingRequest;
-import by.javaguru.jdmik12.bookingservice.model.BookingResponseDto;
-import by.javaguru.jdmik12.bookingservice.model.BookingRequestStatusUpdateDto;
-import by.javaguru.jdmik12.bookingservice.model.ResponseDto;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequest;
+import by.javaguru.jdmik12.bookingservice.dto.BookingResponseDto;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequestStatusUpdateDto;
+import by.javaguru.jdmik12.bookingservice.dto.ResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

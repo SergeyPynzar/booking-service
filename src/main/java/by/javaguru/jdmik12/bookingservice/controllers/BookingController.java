@@ -1,9 +1,9 @@
 package by.javaguru.jdmik12.bookingservice.controllers;
 
-import by.javaguru.jdmik12.bookingservice.model.BookingRequest;
-import by.javaguru.jdmik12.bookingservice.model.BookingResponseDto;
-import by.javaguru.jdmik12.bookingservice.model.BookingRequestStatusUpdateDto;
-import by.javaguru.jdmik12.bookingservice.model.ResponseDto;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequest;
+import by.javaguru.jdmik12.bookingservice.dto.BookingResponseDto;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequestStatusUpdateDto;
+import by.javaguru.jdmik12.bookingservice.dto.ResponseDto;
 import by.javaguru.jdmik12.bookingservice.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ public class BookingController implements BookingControllerApi {
     @GetMapping("/{requestId}")
     public ResponseEntity<BookingResponseDto> getByRequestId(@PathVariable(name = "requestId") Long requestId) {
         log.debug("Received get recruitment requestId: {}", requestId);
-        BookingResponseDto bookingResponseDto = bookingService.getUserByRequestId(requestId);
+        BookingResponseDto bookingResponseDto = bookingService.getBookingByRequestId(requestId);
         log.debug("Response get recruitment request: {}", bookingResponseDto);
         return ResponseEntity.status(HttpStatus.OK).body(bookingResponseDto);
     }
@@ -43,7 +43,7 @@ public class BookingController implements BookingControllerApi {
     public ResponseEntity<BookingResponseDto> updateStatus(@PathVariable Long requestId,
                                                            @RequestBody BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
         log.debug("Received update status recruitment requestId: {}", requestId);
-        BookingResponseDto updateRequestStatus = bookingService.updateUserByRequestId(requestId, bookingRequestStatusUpdateDto);
+        BookingResponseDto updateRequestStatus = bookingService.updateBookingByRequestId(requestId, bookingRequestStatusUpdateDto);
         log.debug("Response update status recruitment request: {}", updateRequestStatus);
         return ResponseEntity.ok(updateRequestStatus);
     }
