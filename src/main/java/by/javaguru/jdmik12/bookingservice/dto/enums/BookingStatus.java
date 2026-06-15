@@ -7,6 +7,7 @@ public enum BookingStatus {
     CHECKED_IN("Заселился"),
     CHECKED_OUT("Выехал"),
     CANCELLED("Отменено"),
+    SECURITY_FAILED("Проверка безопасности не пройдена"),
     NO_SHOW("Не явился");
 
     private final String description;
