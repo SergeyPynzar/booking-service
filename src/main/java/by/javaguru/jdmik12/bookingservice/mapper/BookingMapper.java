@@ -12,13 +12,9 @@ import org.mapstruct.MappingConstants;
 public interface BookingMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "readyToRelocate", ignore = true)
-    @Mapping(target = "readyForRemoteWork", ignore = true)
     @Mapping(target = "status", source = "bookingStatus")
     Bookings toBooking(BookingRequest bookingRequest, BookingStatus bookingStatus);
 
-    @Mapping(target = "isReadyToRelocate", ignore = true)
-    @Mapping(target = "isReadyForRemoteWork", ignore = true)
     BookingResponseDto toDto(Bookings bookings);
 
 }

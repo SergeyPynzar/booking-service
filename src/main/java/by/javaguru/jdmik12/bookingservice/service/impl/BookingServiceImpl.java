@@ -11,16 +11,13 @@ import by.javaguru.jdmik12.bookingservice.dto.ResponseDto;
 import by.javaguru.jdmik12.bookingservice.outbox.CommandOutboxFactory;
 import by.javaguru.jdmik12.bookingservice.repository.BookingRepository;
 import by.javaguru.jdmik12.bookingservice.model.Bookings;
-import by.javaguru.jdmik12.bookingservice.service.ProfilerService;
 import by.javaguru.jdmik12.bookingservice.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.Optional;
-
-import static by.javaguru.jdmik12.bookingservice.model.enums.OutboxStatus.PENDING;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.PENDING;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +27,6 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final BookingMapper bookingMapper;
     private final CommandOutboxFactory commandOutboxFactory;
-    private final ProfilerService profilerService;
 
     @Override
     @Transactional
@@ -51,7 +47,7 @@ public class BookingServiceImpl implements BookingService {
 
     private ResponseDto saveRequestOutbox(Bookings request) {
         try {
-            commandOutboxFactory.buildAllocateBudgetCommandOutbox(request, PENDING);
+            commandOutboxFactory.buildBookingCommandOutbox(request, PENDING);
             return new ResponseDto(request.getId(), DEFAULT_REQUEST_MESSAGE);
         } catch (Exception exception) {
             log.error("Ошибка отправки сообщения о бронировании для заявки ID: {}", request.getId(), exception);
@@ -72,7 +68,6 @@ public class BookingServiceImpl implements BookingService {
         Bookings bookings = bookingRepository
                 .findById(requestId).orElseThrow(DataIntegrationNotFoundException::new);
         bookings.setStatus(bookingRequestStatusUpdateDto.status());
-        profilerService.buildCvRequest(bookings);
 
         return bookingMapper.toDto(bookingRepository.save(bookings));
     }

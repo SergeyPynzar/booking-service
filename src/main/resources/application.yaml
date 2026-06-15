@@ -22,9 +22,9 @@ spring:
   config:
     import: optional:file:.env.sample[.properties]
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/recruitment-db}
+    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/booking-db}
     username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:root}
+    password: ${DATABASE_PASSWORD:postgres}
     hikari:
       maximum-pool-size: 2
       minimum-idle: 1
@@ -72,16 +72,14 @@ management:
 integration:
   kafka:
     producer:
-      accounting.topic.name: jdmik12.accounting.allocation.command
       security.topic.name: jdmik12.security.check.command
-      profiler.topic.name: jdmik12.profiler.create.command
       notification.topic.name: jdmik12.notification.send.command
       outbox.topic.name: jdmik12.streaming.command
-      dlt.topic.name: jdmik12.recruitment-pr.event.dlt
+      dlt.topic.name: jdmik12.booking-pr.event.dlt
     consumer:
-      recruitment.topic.name: jdmik12.recruitment-pr.event
-    recruitment-command-topic:
-      name: jdmik12.recruitment-pr.event
+      booking.topic.name: jdmik12.booking-pr.event
+    booking-command-topic:
+      name: jdmik12.booking-pr.event
       partitions: 3
       replicas: 3
       min-in-sync-replicas: 2
