@@ -1,0 +1,105 @@
+stages:
+  - build
+  - test
+  - delivery
+  - deploy
+
+variables:
+  MAVEN_CLI_OPTS: >-
+    --batch-mode
+    --no-transfer-progress
+    -s .m2/settings.xml
+    -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository
+    -DaltDeploymentRepository=artifactory::default::$MAVEN_REPO_URL$MAVEN_REPO_PATH
+  MAVEN_OPTS: "-Xmx512m -XX:MaxMetaspaceSize=256m"
+  PACKAGE_VERSION: "1.0.0"
+  GROUP_NAME: "jdmik12"
+
+
+build-jar:
+  stage: build
+  tags:
+    - build_17
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+    - mvn $MAVEN_CLI_OPTS -DskipTests package -Drevision=$PACKAGE_VERSION
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - target/*.jar
+
+test-job:
+  stage: test
+  tags:
+    - build_17
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+    - echo "Running tests..."
+    - mvn $MAVEN_CLI_OPTS versions:set -DnewVersion=$PACKAGE_VERSION -DgenerateBackupPoms=false
+    - mvn $MAVEN_CLI_OPTS test
+
+jar-delivery-job:
+  stage: delivery
+  tags:
+    - build_17
+  needs:
+    - job: build-jar
+      artifacts: true
+    - job: test-job
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
+  script:
+    - mvn $MAVEN_CLI_OPTS versions:set -DnewVersion=$PACKAGE_VERSION -DgenerateBackupPoms=false
+    - mvn $MAVEN_CLI_OPTS clean deploy -DskipTests
+
+delivery-image-job:
+  stage: delivery
+  tags:
+    - docker
+  needs:
+    - job: build-jar
+      artifacts: true
+    - job: test-job
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
+  script:
+    - echo "$DOCKER_CERTIFICATE" > /usr/local/share/ca-certificates/root-ca.cer
+    - update-ca-certificates
+    - export TAG_FOR_DOCKER_IMAGE_DEPLOY="${REPO_DOCKER_IP}/${DOCKER_REPO_REL}/${GROUP_NAME}/${CI_PROJECT_NAME}:${PACKAGE_VERSION}"
+    - echo "$MAVEN_REPO_PASSWORD" | docker login "$REPO_DOCKER_IP" -u "$MAVEN_REPO_USER" --password-stdin
+    - docker build -t "$TAG_FOR_DOCKER_IMAGE_DEPLOY" .
+    - docker push "$TAG_FOR_DOCKER_IMAGE_DEPLOY"
+
+k8s-deploy:
+  stage: deploy
+  environment:
+    name: dev
+    url: https://k8s.javaguru.team/jdmik12-rpynzar-service/swagger-ui/index.html
+  image: repository.javaguru.team:5061/dysnix/kubectl:v1.27
+  tags:
+    - build_17
+  variables:
+    KUBE_NAMESPACE: "jdmik12-rpynzar"
+    KUBECTL_CLI_OPTS: >-
+      --namespace=$KUBE_NAMESPACE
+      --server=$KUBECTL_URL
+      --insecure-skip-tls-verify=true
+      --token=$KUBE_TOKEN
+  script:
+    - sed -i "s|\${PACKAGE_VERSION}|${PACKAGE_VERSION}|g" k8s/deployment.yml
+    - kubectl get namespace $KUBE_NAMESPACE $KUBECTL_CLI_OPTS || kubectl create namespace $KUBE_NAMESPACE $KUBECTL_CLI_OPTS
+    - kubectl ${KUBECTL_CLI_OPTS} apply -f ./k8s/ -n $KUBE_NAMESPACE
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
+  needs:
+    - job: delivery-image-job
+  when: manual
+
+cache:
+  paths:
+    - .m2/repository/[a-q]*
+    - .m2/repository/[r-z]*
