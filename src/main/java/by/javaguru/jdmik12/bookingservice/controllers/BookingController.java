@@ -23,9 +23,9 @@ public class BookingController implements BookingControllerApi {
 
     @PostMapping
     public ResponseEntity<ResponseDto> create(@RequestBody @Valid BookingRequest bookingRequest) {
-        log.debug("Received recruitment request: {}", bookingRequest);
+        log.debug("Received booking request: {}", bookingRequest);
         ResponseDto responseDto = bookingService.createBooking(bookingRequest);
-        log.debug("Response recruitment request: {}", responseDto);
+        log.debug("Response booking request: {}", responseDto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(responseDto);
@@ -33,18 +33,18 @@ public class BookingController implements BookingControllerApi {
 
     @GetMapping("/{requestId}")
     public ResponseEntity<BookingResponseDto> getByRequestId(@PathVariable(name = "requestId") Long requestId) {
-        log.debug("Received get recruitment requestId: {}", requestId);
+        log.debug("Received get booking requestId: {}", requestId);
         BookingResponseDto bookingResponseDto = bookingService.getBookingByRequestId(requestId);
-        log.debug("Response get recruitment request: {}", bookingResponseDto);
+        log.debug("Response get booking request: {}", bookingResponseDto);
         return ResponseEntity.status(HttpStatus.OK).body(bookingResponseDto);
     }
 
     @PatchMapping("/{requestId}")
     public ResponseEntity<BookingResponseDto> updateStatus(@PathVariable Long requestId,
                                                            @RequestBody BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
-        log.debug("Received update status recruitment requestId: {}", requestId);
+        log.debug("Received update status booking requestId: {}", requestId);
         BookingResponseDto updateRequestStatus = bookingService.updateBookingByRequestId(requestId, bookingRequestStatusUpdateDto);
-        log.debug("Response update status recruitment request: {}", updateRequestStatus);
+        log.debug("Response update status booking request: {}", updateRequestStatus);
         return ResponseEntity.ok(updateRequestStatus);
     }
 
