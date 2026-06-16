@@ -41,7 +41,7 @@ public class BookingController implements BookingControllerApi {
 
     @PatchMapping("/{requestId}")
     public ResponseEntity<BookingResponseDto> updateStatus(@PathVariable Long requestId,
-                                                           @RequestBody BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
+                                                           @RequestBody @Valid BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
         log.debug("Received update status booking requestId: {}", requestId);
         BookingResponseDto updateRequestStatus = bookingService.updateBookingByRequestId(requestId, bookingRequestStatusUpdateDto);
         log.debug("Response update status booking request: {}", updateRequestStatus);

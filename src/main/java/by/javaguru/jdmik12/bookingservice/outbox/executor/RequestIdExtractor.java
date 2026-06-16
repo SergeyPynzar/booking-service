@@ -1,5 +1,6 @@
 package by.javaguru.jdmik12.bookingservice.outbox.executor;
 
+import by.javaguru.jdmik12.bookingservice.messaging.StreamingCommand;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

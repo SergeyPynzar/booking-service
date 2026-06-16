@@ -13,7 +13,6 @@ import by.javaguru.jdmik12.bookingservice.service.NotificationService;
 import by.javaguru.jdmik12.bookingservice.service.SecurityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.TERMINAL;
@@ -33,19 +32,19 @@ public class SecurityServiceImpl implements SecurityService {
     public void handleSecurityCheckProcess(CheckSecurityEvent checkSecurityEvent) {
         validateSecurityEvent(checkSecurityEvent);
 
-        Bookings request = getRecruitmentRequest(checkSecurityEvent.requestId());
+        Bookings request = getBooking(checkSecurityEvent.requestId());
         updateSecurityRequestStatus(request, checkSecurityEvent);
         bookingRepository.save(request);
 
     }
 
     private void validateSecurityEvent(CheckSecurityEvent event) {
-        if (ObjectUtils.isEmpty(event) || event.requestId() == null) {
+        if (event == null || event.requestId() == null) {
             throw new ServiceIntegrationException(REQUEST_ID_ERROR_SECURITY);
         }
     }
 
-    private Bookings getRecruitmentRequest(Long requestId) {
+    private Bookings getBooking(Long requestId) {
         return bookingRepository.findById(requestId).orElseThrow(DataIntegrationNotFoundException::new);
     }
 
@@ -54,7 +53,7 @@ public class SecurityServiceImpl implements SecurityService {
         if (event.isPassed()) {
             log.debug("SECURITY_PASSED : {}", event.requestId());
             commandOutboxFactory.updateStatusOutbox(outbox, TERMINAL);
-            request.setStatus(BookingStatus.CONFIRMED.name());
+            request.setStatus(BookingStatus.PENDING.name());
         } else {
             log.warn("SECURITY_FAILED : {}", event.requestId());
             commandOutboxFactory.updateStatusOutbox(outbox, TERMINAL);

@@ -81,7 +81,7 @@ public class GlobalExceptionHandler {
         });
 
         return new ErrorResponse(
-                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.BAD_REQUEST.value(),
                 VALIDATION_MESSAGE + errors,
                 ZonedDateTime.now().withZoneSameInstant(ZoneId.of(EUROPE_MINSK)));
     }

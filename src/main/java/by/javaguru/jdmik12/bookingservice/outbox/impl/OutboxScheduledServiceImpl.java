@@ -2,8 +2,9 @@ package by.javaguru.jdmik12.bookingservice.outbox.impl;
 
 import by.javaguru.jdmik12.bookingservice.outbox.CommandOutboxFactory;
 import by.javaguru.jdmik12.bookingservice.outbox.OutboxScheduledService;
-import by.javaguru.jdmik12.bookingservice.outbox.cash.OutboxCache;
-import by.javaguru.jdmik12.bookingservice.outbox.kafka.cliens.OutboxProducerClient;
+import by.javaguru.jdmik12.bookingservice.messaging.StreamingCommand;
+import by.javaguru.jdmik12.bookingservice.outbox.cache.OutboxCache;
+import by.javaguru.jdmik12.bookingservice.outbox.kafka.clients.OutboxProducerClient;
 import by.javaguru.jdmik12.bookingservice.outbox.model.Outbox;
 import by.javaguru.jdmik12.bookingservice.repository.OutboxRepository;
 import io.micrometer.tracing.Span;
@@ -59,9 +60,7 @@ public class OutboxScheduledServiceImpl implements OutboxScheduledService {
                 outboxProducerClient.sendMessageWithKey(
                         StringUtils.EMPTY,
                         outbox.getPayloadType(),
-                        StreamingCommand.builder()
-                                .withPayload(outbox.getPayload())
-                                .build());
+                        StreamingCommand.of(outbox.getPayload()));
 
                 updateOutboxAfterSuccess(outbox, childSpan);
             }

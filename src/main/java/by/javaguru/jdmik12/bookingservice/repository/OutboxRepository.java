@@ -7,9 +7,10 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface OutboxRepository extends JpaRepository<Outbox, Long> {
+public interface OutboxRepository extends JpaRepository<Outbox, UUID> {
 
     @Query(value = "SELECT * FROM outbox " +
             "WHERE status = :status " +

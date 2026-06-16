@@ -9,22 +9,20 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.MappingTarget;
 
-@Mapper(componentModel = MappingConstants.ComponentModel.SPRING,
-        uses = {UtilsConverter.class})
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, uses = UtilsConverter.class)
 public interface OutboxMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "requestMessageId", ignore = true)
+    @Mapping(target = "requestMessageId", source = "requestId")
     @Mapping(target = "payloadType", source = "payloadType")
-    @Mapping(target = "payload", source = "checkSecurityCommand", qualifiedByName = "toJson")
+    @Mapping(target = "payload", source = "payload", qualifiedByName = "toJson")
     @Mapping(target = "status", source = "outboxStatus")
     @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "retryCount", source = "retryCount", qualifiedByName = "updateRetryCount")
-    @Mapping(target = "processedAt", expression = "java(java.time.Instant.now())")
-    @Mapping(target = "traceId", source = "checkSecurityCommand.requestId", qualifiedByName = "getTraceIdFromTracer")
-    @Mapping(target = "spanId", source = "checkSecurityCommand.requestId", qualifiedByName = "getSpanIdFromTracer")
-    void toOutboxCheckSecurityCommand(@MappingTarget Outbox outbox, CheckSecurityCommand checkSecurityCommand,
-                                      PayloadType payloadType, OutboxStatus outboxStatus, Integer retryCount);
+    @Mapping(target = "processedAt", ignore = true)
+    @Mapping(target = "retryCount", constant = "0")
+    @Mapping(target = "traceId", ignore = true)
+    @Mapping(target = "spanId", ignore = true)
+    Outbox newOutbox(Long requestId, Object payload, PayloadType payloadType, OutboxStatus outboxStatus);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "requestMessageId", ignore = true)
@@ -37,5 +35,4 @@ public interface OutboxMapper {
     @Mapping(target = "processedAt", expression = "java(java.time.Instant.now())")
     @Mapping(target = "status", source = "outboxStatus")
     void toOutboxUpdate(@MappingTarget Outbox outbox, Integer retryCount, OutboxStatus outboxStatus);
-
 }

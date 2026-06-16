@@ -86,7 +86,7 @@ services:
 
   db:
     image: postgres:17-alpine
-    container_name: recruitment-db
+    container_name: booking-db
     restart: always
     environment:
       POSTGRES_USER: ${DATABASE_USERNAME}

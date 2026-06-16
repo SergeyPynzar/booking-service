@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import static org.springframework.util.MimeTypeUtils.APPLICATION_JSON_VALUE;
 
-@Tag(name = "Create booking in system")
+@Tag(name = "Bookings")
 public interface BookingControllerApi {
 
-    @Operation(summary = "Designed booking to process")
+    @Operation(summary = "Create a new booking")
     @ApiResponse(
             responseCode = "201",
             description = "CREATED",
@@ -30,7 +30,7 @@ public interface BookingControllerApi {
     @PostMapping
     ResponseEntity<ResponseDto> create(@RequestBody @Valid BookingRequest bookingRequest);
 
-    @Operation(summary = "Get booking from system")
+    @Operation(summary = "Get booking by id")
     @ApiResponse(
             responseCode = "200",
             description = "OK",
@@ -41,7 +41,7 @@ public interface BookingControllerApi {
     @ApiResponse(responseCode = "404", description = "Get request NOT FOUND")
     ResponseEntity<BookingResponseDto> getByRequestId(@PathVariable(name = "requestId") Long requestId);
 
-    @Operation(summary = "Update status in system")
+    @Operation(summary = "Update booking status")
     @ApiResponse(
             responseCode = "200",
             description = "OK",

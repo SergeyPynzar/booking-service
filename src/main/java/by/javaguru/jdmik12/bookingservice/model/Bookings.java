@@ -29,7 +29,7 @@ public class Bookings {
     private LocalDate checkOutDate;
     @Column(name = "guests_count", nullable = false)
     private int guestsCount;
-    @Column(name = "special_requests", nullable = false)
+    @Column(name = "special_requests")
     private String specialRequests;
     @Column(name = "total_price", nullable = false)
     private BigDecimal totalPrice;

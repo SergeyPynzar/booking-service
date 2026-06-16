@@ -67,7 +67,7 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponseDto updateBookingByRequestId(Long requestId, BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
         Bookings bookings = bookingRepository
                 .findById(requestId).orElseThrow(DataIntegrationNotFoundException::new);
-        bookings.setStatus(bookingRequestStatusUpdateDto.status());
+        bookings.setStatus(bookingRequestStatusUpdateDto.status().name());
 
         return bookingMapper.toDto(bookingRepository.save(bookings));
     }

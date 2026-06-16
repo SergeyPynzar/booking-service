@@ -1,100 +1,98 @@
 package by.javaguru.jdmik12.bookingservice.service.impl;
 
-import by.javaguru.jdmik12.common.accounting.message.command.AllocateBudgetCommand;
-import by.javaguru.jdmik12.common.base.KafkaMessage;
-import by.javaguru.jdmik12.common.base.RequestType;
-import by.javaguru.jdmik12.bookingservice.base.KafkaIntegrationTest;
-import by.javaguru.jdmik12.bookingservice.repository.OutboxRepository;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequest;
+import by.javaguru.jdmik12.bookingservice.dto.BookingRequestStatusUpdateDto;
+import by.javaguru.jdmik12.bookingservice.dto.enums.BookingStatus;
+import by.javaguru.jdmik12.bookingservice.exceptions.DataIntegrationNotFoundException;
+import by.javaguru.jdmik12.bookingservice.mapper.BookingMapper;
+import by.javaguru.jdmik12.bookingservice.model.Bookings;
+import by.javaguru.jdmik12.bookingservice.outbox.impl.factory.BookingCommandOutboxFactory;
 import by.javaguru.jdmik12.bookingservice.repository.BookingRepository;
-import by.javaguru.jdmik12.bookingservice.service.BookingService;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.kafka.test.EmbeddedKafkaBroker;
-import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.kafka.test.utils.KafkaTestUtils;
-import org.springframework.orm.jpa.JpaTransactionManager;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.Map;
-import java.util.UUID;
+import java.time.LocalDate;
+import java.util.Optional;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.PENDING;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-
-@KafkaIntegrationTest
-@EmbeddedKafka(topics = {"${integration.kafka.producer.accounting.topic.name}"})
+@ExtendWith(MockitoExtension.class)
 class BookingServiceImplTest {
 
-    @Value("${integration.kafka.producer.accounting.topic.name}")
-    private String accountingAllocateCommandTopic;
-
-    @MockitoBean
-    private BookingService bookingService;
-
-    @MockitoBean
+    @Mock
     private BookingRepository bookingRepository;
+    @Mock
+    private BookingMapper bookingMapper;
+    @Mock
+    private BookingCommandOutboxFactory commandOutboxFactory;
 
-    @MockitoBean
-    private OutboxRepository outboxRepository;
+    @InjectMocks
+    private BookingServiceImpl bookingService;
 
-    private Consumer<String, KafkaMessage> consumer;
+    @Test
+    void createBooking_persistsAndEnqueuesOutbox() {
+        BookingRequest request = BookingRequest.builder()
+                .userId(10L)
+                .roomId(5L)
+                .checkInDate(LocalDate.now().plusDays(1))
+                .checkOutDate(LocalDate.now().plusDays(3))
+                .guestsCount(2)
+                .totalPrice(new BigDecimal("199.99"))
+                .build();
 
-    @Autowired
-    private KafkaTemplate<String, KafkaMessage> kafkaTemplate;
+        Bookings entity = new Bookings();
+        entity.setId(42L);
 
-    @MockitoBean
-    private JpaTransactionManager transactionManager;
+        when(bookingMapper.toBooking(request, BookingStatus.CREATED)).thenReturn(entity);
+        when(bookingRepository.save(entity)).thenReturn(entity);
 
-    @Autowired
-    private EmbeddedKafkaBroker embeddedKafka;
+        var response = bookingService.createBooking(request);
 
-    @BeforeEach
-    void setup() {
-        Map<String, Object> props = KafkaTestUtils.consumerProps("test-group", "true", embeddedKafka);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-
-        JsonDeserializer<KafkaMessage> jsonDeserializer = new JsonDeserializer<>(KafkaMessage.class);
-        jsonDeserializer.addTrustedPackages("*");
-
-        ConsumerFactory<String, KafkaMessage> cf = new DefaultKafkaConsumerFactory<>(
-                props, new StringDeserializer(), jsonDeserializer);
-
-        consumer = cf.createConsumer();
-        embeddedKafka.consumeFromAnEmbeddedTopic(consumer, accountingAllocateCommandTopic);
+        assertThat(response.id()).isEqualTo(42L);
+        verify(commandOutboxFactory).buildBookingCommandOutbox(entity, PENDING);
     }
 
     @Test
-    void allocationIsSentToAccountingTopic() {
+    void getBookingByRequestId_throwsWhenMissing() {
+        when(bookingRepository.findById(99L)).thenReturn(Optional.empty());
 
-        String key = UUID.randomUUID().toString();
-        var command = AllocateBudgetCommand.builder()
-                .withRequestId(1L)
-                .withBudget(new BigDecimal("1000.00"))
-                .withType(RequestType.RECRUITMENT_PR)
-                .build();
-
-        kafkaTemplate.executeInTransaction(operations -> {
-            operations.send(accountingAllocateCommandTopic, key, command);
-            return null;
-        });
-
-        ConsumerRecord<String, KafkaMessage> record =
-                KafkaTestUtils.getSingleRecord(consumer, accountingAllocateCommandTopic);
-
-        assertThat(record.key()).isEqualTo(key);
-        assertThat(record.value()).isInstanceOf(AllocateBudgetCommand.class);
+        assertThatThrownBy(() -> bookingService.getBookingByRequestId(99L))
+                .isInstanceOf(DataIntegrationNotFoundException.class);
     }
 
+    @Test
+    void updateBookingByRequestId_updatesStatus() {
+        Bookings entity = new Bookings();
+        entity.setId(1L);
+        entity.setStatus(BookingStatus.CREATED.name());
+
+        when(bookingRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(bookingRepository.save(entity)).thenReturn(entity);
+        when(bookingMapper.toDto(entity)).thenReturn(
+                new by.javaguru.jdmik12.bookingservice.dto.BookingResponseDto(
+                        1L, 10L, 5L,
+                        LocalDate.now().plusDays(1),
+                        LocalDate.now().plusDays(2),
+                        2, null, new BigDecimal("100"),
+                        BookingStatus.CONFIRMED
+                )
+        );
+
+        var dto = new BookingRequestStatusUpdateDto(BookingStatus.CONFIRMED);
+        var result = bookingService.updateBookingByRequestId(1L, dto);
+
+        assertThat(entity.getStatus()).isEqualTo(BookingStatus.CONFIRMED.name());
+        assertThat(result.status()).isEqualTo(BookingStatus.CONFIRMED);
+        verify(bookingRepository).save(entity);
+    }
 }
