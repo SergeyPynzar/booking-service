@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.TERMINAL;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.SUCCESS;
 
 @Service
 @Slf4j
@@ -28,7 +28,7 @@ public class SecurityServiceImpl implements SecurityService {
     private final OutboxRepository outboxRepository;
 
     @Override
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void handleSecurityCheckProcess(CheckSecurityEvent checkSecurityEvent) {
         validateSecurityEvent(checkSecurityEvent);
 
@@ -49,14 +49,19 @@ public class SecurityServiceImpl implements SecurityService {
     }
 
     private void updateSecurityRequestStatus(Bookings request, CheckSecurityEvent event) {
-        Outbox outbox = outboxRepository.findByRequestMessageId(event.requestId()).orElseThrow();
+        Outbox outbox = outboxRepository.findByRequestMessageId(event.requestId())
+                .orElseThrow(DataIntegrationNotFoundException::new);
+        if (outbox.getStatus() == SUCCESS) {
+            log.info("Security event for booking {} was already processed", event.requestId());
+            return;
+        }
         if (event.isPassed()) {
             log.debug("SECURITY_PASSED : {}", event.requestId());
-            commandOutboxFactory.updateStatusOutbox(outbox, TERMINAL);
+            commandOutboxFactory.updateStatusOutbox(outbox, SUCCESS);
             request.setStatus(BookingStatus.PENDING.name());
         } else {
             log.warn("SECURITY_FAILED : {}", event.requestId());
-            commandOutboxFactory.updateStatusOutbox(outbox, TERMINAL);
+            commandOutboxFactory.updateStatusOutbox(outbox, SUCCESS);
             request.setStatus(BookingStatus.SECURITY_FAILED.name());
             notificationService.sendMessage(request);
         }

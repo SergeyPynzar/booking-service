@@ -1,106 +1,108 @@
 # Booking Service
 
-Микросервис бронирования номеров в рамках event-driven архитектуры: REST API, PostgreSQL, Apache Kafka, паттерн **Transactional Outbox**, observability (Actuator, Prometheus, OpenTelemetry).
+Сервис принимает и сопровождает бронирования номеров. Он сохраняет заявку в PostgreSQL, ставит её на асинхронную проверку безопасности через Kafka и получает результат этой проверки. Надёжность публикации обеспечивается паттерном Transactional Outbox.
 
-## Возможности
+## Что уже реализовано
 
-- CRUD-поток бронирования: создание, получение по ID, обновление статуса
-- Валидация входных данных (Bean Validation)
-- Асинхронная оркестрация: после создания брони в outbox записывается команда проверки безопасности
-- Планировщик публикует сообщения из outbox в Kafka (at-least-once + идемпотентность на стороне consumer)
-- Обработка ответа проверки безопасности через Kafka listener
-- OpenAPI / Swagger UI, централизованная обработка ошибок
-- Docker, Kubernetes manifests, GitLab CI
+- Создание бронирования, получение по ID и изменение статуса через REST API.
+- Валидация дат, количества гостей и положительной стоимости.
+- Контролируемые переходы статусов: нельзя, например, перевести новую бронь сразу в `CHECKED_OUT`.
+- Атомарное сохранение бронирования и outbox-команды в одной БД-транзакции.
+- Управляемая публикация outbox-команд в Kafka: `NEW → IN_PROGRESS → SUCCESS | ERROR`.
+- Защита от конкурентной обработки через атомарную смену статуса в PostgreSQL и Redis lease с локальным fallback.
+- Получение `CheckSecurityEvent`: успешная проверка переводит бронь в `PENDING`, неуспешная — в `SECURITY_FAILED` и публикует notification-команду.
+- OpenAPI/Swagger, Actuator health и централизованные HTTP-ошибки.
+
+Внешние consumers для проверки безопасности и отправки уведомлений не входят в этот репозиторий. Без security consumer бронь останется в `CREATED` после создания — это ожидаемое поведение интеграции.
 
 ## Стек
 
-Java 17 · Spring Boot 3.4 · Spring Data JPA · Liquibase · Spring Kafka · MapStruct · Micrometer · springdoc-openapi
+Java 21, Spring Boot 3.5, Spring Web, Spring Data JPA, PostgreSQL, Liquibase, Apache Kafka, MapStruct, Lombok, Micrometer/Actuator, Prometheus, OpenTelemetry, springdoc-openapi, JUnit 5, Mockito и Testcontainers.
 
-## Быстрый старт (локально)
+## Устройство
 
-### 1. Инфраструктура
-
-```bash
-cp .env.sample .env
-docker compose --env-file .env up -d db kafka-1 kafka-2 kafka-3
+```mermaid
+flowchart LR
+    client[Client] --> api[Booking REST API]
+    api --> transaction[Database transaction]
+    transaction --> bookings[(PostgreSQL bookings)]
+    transaction --> outbox[(PostgreSQL outbox)]
+    job[OutboxJob virtual thread] --> outbox
+    job --> lease[Redis lease or local fallback]
+    job --> kafka[Kafka]
+    kafka --> security[External security service]
+    security --> reply[CheckSecurityEvent]
+    reply --> listener[Kafka listener]
+    listener --> bookings
+    listener --> notification[Notification topic]
 ```
 
-### 2. Приложение
+1. `POST /api/v1/bookings` создаёт бронь в `CREATED` и outbox-запись `NEW`.
+2. `OutboxJob` в виртуальном потоке выбирает ограниченный batch свежих `NEW` записей. Лимиты и период job настраиваются через `OUTBOX_BATCH_SIZE`, `OUTBOX_LOOKBACK_DAYS`, `OUTBOX_FIXED_DELAY`.
+3. После подтверждения Kafka запись становится `SUCCESS`; при ошибке публикации — `ERROR`.
+4. Внешний security-сервис публикует `CheckSecurityEvent` в reply topic, а listener обновляет статус бронирования.
 
-```bash
-./mvnw spring-boot:run
-```
+## API
 
-По умолчанию: `http://localhost:8080` (порт задаётся `SERVER_PORT`).
+| Метод | Endpoint | Назначение |
+| --- | --- | --- |
+| POST | `/api/v1/bookings` | Создать бронирование; ответ `201` содержит ID заявки. |
+| GET | `/api/v1/bookings/{id}` | Получить бронирование. |
+| PATCH | `/api/v1/bookings/{id}` | Изменить статус согласно разрешённому жизненному циклу. |
+| GET | `/actuator/health` | Проверить готовность приложения. |
 
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- Health: `http://localhost:8080/actuator/health`
+Основные статусы: `CREATED`, `PENDING`, `CONFIRMED`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`, `SECURITY_FAILED`, `NO_SHOW`.
 
-### 3. Пример запроса
+Пример создания:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/bookings \
   -H "Content-Type: application/json" \
-  -d '{
-    "userId": 1,
-    "roomId": 101,
-    "checkInDate": "2026-06-01",
-    "checkOutDate": "2026-06-05",
-    "guestsCount": 2,
-    "totalPrice": 420.00
-  }'
+  -d '{"userId":1,"roomId":101,"checkInDate":"2026-11-01","checkOutDate":"2026-11-05","guestsCount":2,"totalPrice":420.00}'
 ```
 
-## API
+## Запуск за несколько минут
 
-| Метод | Путь | Описание |
-|-------|------|----------|
-| POST | `/api/v1/bookings` | Создать бронирование |
-| GET | `/api/v1/bookings/{requestId}` | Получить бронирование |
-| PATCH | `/api/v1/bookings/{requestId}` | Обновить статус |
+Требования: JDK 21, Docker Desktop с запущенным daemon и Docker Compose.
 
-Статусы: `CREATED`, `PENDING`, `CONFIRMED`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`, `SECURITY_FAILED`, `NO_SHOW`.
+1. Подготовьте переменные:
 
-## Архитектура (упрощённо)
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as Booking API
-    participant DB as PostgreSQL
-    participant Job as Outbox Scheduler
-    participant Kafka
-    participant Security as Security consumer
-
-    Client->>API: POST /bookings
-    API->>DB: booking + outbox (tx)
-    Job->>DB: poll PENDING outbox
-    Job->>Kafka: StreamingCommand
-    Security->>Kafka: CheckSecurityEvent
-    Kafka->>API: listener updates status
+```powershell
+Copy-Item .env.sample .env
 ```
 
-## Тесты
+На Linux/macOS: `cp .env.sample .env`.
 
-```bash
-./mvnw test
+2. Запустите PostgreSQL и Kafka-кластер из трёх broker (это необходимо, так как topic создаётся с replication factor 3):
+
+```powershell
+docker compose --env-file .env up -d db kafka-1 kafka-2 kafka-3
 ```
 
-Unit-тесты для сервисного слоя и `@WebMvcTest` для REST-контроллера.
+3. Запустите сервис:
 
-## Сборка и деплой
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
-```bash
-./mvnw -DskipTests package
+На Linux/macOS: `./mvnw spring-boot:run`.
+
+Проверьте:
+
+- Swagger: `http://localhost:8080/swagger-ui/index.html`
+- Health: `http://localhost:8080/actuator/health`
+- API: `http://localhost:8080/api/v1/bookings`
+
+## Проверки и сборка
+
+```powershell
+.\mvnw.cmd test
+.\mvnw.cmd package -DskipTests
 docker build -t booking-service:local .
 ```
 
-Манифесты Kubernetes — каталог `k8s/`. Pipeline — `.gitlab-ci.yml`.
+Тесты покрывают REST-контроллер, сервис бронирований, обработку security-событий, успешную и ошибочную публикацию outbox. Интеграционный тест Liquibase/PostgreSQL запускается автоматически, если доступен Docker; иначе Maven помечает его как skipped.
 
-## Конфигурация
+## Конфигурация и доставка
 
-Основные переменные окружения см. в `.env.sample` и `src/main/resources/application.yaml`.
-
-## Лицензия
-
-См. [LICENSE](LICENSE).
+Локальные параметры находятся в [`.env.sample`](.env.sample), основная Spring-конфигурация — в [`application.yaml`](src/main/resources/application.yaml). Kubernetes-манифесты лежат в [`k8s/`](k8s/), GitLab pipeline — в [`.gitlab-ci.yml`](.gitlab-ci.yml). Перед применением `k8s/secret.yml` задайте реальные реквизиты БД через защищённый механизм CI/CD или секреты кластера.

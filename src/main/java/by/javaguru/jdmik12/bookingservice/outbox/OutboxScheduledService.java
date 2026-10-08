@@ -4,6 +4,4 @@ public interface OutboxScheduledService {
 
     void startProcessSendToOutbox();
 
-    void startProcessUpdateStatusInCash();
-
 }

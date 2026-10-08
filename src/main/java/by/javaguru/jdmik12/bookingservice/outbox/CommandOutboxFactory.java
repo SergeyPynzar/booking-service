@@ -17,9 +17,12 @@ public abstract class CommandOutboxFactory {
 
     public abstract void buildBookingCommandOutbox(Bookings booking, OutboxStatus outboxStatus);
 
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void updateStatusOutbox(Outbox outbox, OutboxStatus outboxStatus) {
-        outboxMapper.toOutboxUpdate(outbox, outbox.getRetryCount(), outboxStatus);
+        if (outboxStatus == OutboxStatus.ERROR) {
+            outbox.setRetryCount(outbox.getRetryCount() + 1);
+        }
+        outboxMapper.toOutboxUpdate(outbox, outboxStatus);
         outboxRepository.save(outbox);
     }
 }

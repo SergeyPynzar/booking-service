@@ -38,7 +38,7 @@ public class Outbox {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private OutboxStatus status = OutboxStatus.PENDING;
+    private OutboxStatus status = OutboxStatus.NEW;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="2026-10-08-add_outbox_processing_index" author="booking-service">
+        <addUniqueConstraint tableName="outbox"
+                             columnNames="request_message_id"
+                             constraintName="uk_outbox_request_message_id"/>
+        <createIndex tableName="outbox" indexName="idx_outbox_status_created_at">
+            <column name="status"/>
+            <column name="created_at"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="outbox" indexName="idx_outbox_status_created_at"/>
+            <dropUniqueConstraint tableName="outbox" constraintName="uk_outbox_request_message_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

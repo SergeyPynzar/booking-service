@@ -20,7 +20,7 @@ spring:
   application:
     name: booking-service
   config:
-    import: optional:file:.env.sample[.properties]
+    import: optional:file:.env[.properties]
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/booking-db}
     username: ${DATABASE_USERNAME:postgres}
@@ -28,6 +28,12 @@ spring:
     hikari:
       maximum-pool-size: 2
       minimum-idle: 1
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: 200ms
+      timeout: 200ms
   liquibase:
     change-log: db.changelog/changelog.xml
   jpa:
@@ -86,6 +92,14 @@ integration:
 
 scheduling:
   enabled: true
+
+outbox:
+  cache:
+    lease-duration: 30s
+  processing:
+    batch-size: ${OUTBOX_BATCH_SIZE:20}
+    lookback-days: ${OUTBOX_LOOKBACK_DAYS:7}
+    fixed-delay: ${OUTBOX_FIXED_DELAY:5s}
 
 logging:
   level:

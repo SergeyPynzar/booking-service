@@ -5,6 +5,7 @@ import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import lombok.Builder;
@@ -33,13 +34,14 @@ public record BookingRequest(@NotNull(message = "ID пользователя о�
                              @Size(max = 500, message = "Особые пожелания не более 500 символов")
                              String specialRequests,
 
-                             @NotNull(message = "Стоимость проживания")
+                             @NotNull(message = "Стоимость проживания обязательна")
+                             @Positive(message = "Стоимость проживания должна быть положительной")
                              BigDecimal totalPrice
 ) {
-    // Валидация: дата выезда после даты заезда
+    // Дата выезда должна быть строго позже даты заезда.
     public BookingRequest {
         if (checkOutDate != null && checkInDate != null &&
-                checkOutDate.isBefore(checkInDate)) {
+                !checkOutDate.isAfter(checkInDate)) {
             throw new IllegalArgumentException("Дата выезда должна быть позже даты заезда");
         }
     }

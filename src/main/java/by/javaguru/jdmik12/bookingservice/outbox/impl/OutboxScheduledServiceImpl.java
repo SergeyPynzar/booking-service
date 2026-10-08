@@ -2,126 +2,83 @@ package by.javaguru.jdmik12.bookingservice.outbox.impl;
 
 import by.javaguru.jdmik12.bookingservice.outbox.CommandOutboxFactory;
 import by.javaguru.jdmik12.bookingservice.outbox.OutboxScheduledService;
+import by.javaguru.jdmik12.bookingservice.outbox.cache.OutboxLeaseCache;
 import by.javaguru.jdmik12.bookingservice.messaging.StreamingCommand;
-import by.javaguru.jdmik12.bookingservice.outbox.cache.OutboxCache;
 import by.javaguru.jdmik12.bookingservice.outbox.kafka.clients.OutboxProducerClient;
 import by.javaguru.jdmik12.bookingservice.outbox.model.Outbox;
 import by.javaguru.jdmik12.bookingservice.repository.OutboxRepository;
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.TraceContext;
-import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
-import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.*;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.ERROR;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.IN_PROGRESS;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.NEW;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.SUCCESS;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxScheduledServiceImpl implements OutboxScheduledService {
-    private final static Integer DEFAULT_TIMEOUT_RETRY_COUNT = 20;
-    private final static String TIMEOUT_ERROR_MESSAGE = "Время обработки запроса завершено! requestId: {}";
     private final OutboxProducerClient outboxProducerClient;
-    private final CommandOutboxFactory commandOutboxFactory;
     private final OutboxRepository outboxRepository;
-    private final Tracer tracer;
+    private final OutboxLeaseCache outboxLeaseCache;
+
+    @Value("${outbox.cache.lease-duration:30s}")
+    private Duration leaseDuration;
+
+    @Value("${outbox.processing.batch-size:20}")
+    private int batchSize;
+
+    @Value("${outbox.processing.lookback-days:7}")
+    private int lookbackDays;
 
     @Override
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public void startProcessSendToOutbox() {
-        List<Outbox> outboxes = outboxRepository.findAllByEventTypeAndStatusBlocked(PENDING.name());
+        List<Outbox> outboxes = outboxRepository.findBatchForProcessing(
+                NEW.name(),
+                Instant.now().minus(Duration.ofDays(lookbackDays)),
+                batchSize);
 
-        for (Outbox outbox : outboxes) {
-            if (isTimeoutExceeded(outbox)) {
-                handleTimeout(outbox);
-                continue;
-            }
-            processOutbox(outbox);
+        if (outboxes.isEmpty()) {
+            log.debug("No NEW outbox records found for processing");
+            return;
         }
+
+        outboxes.stream()
+                .filter(outbox -> outboxLeaseCache.tryAcquire(outbox.getId(), effectiveLeaseDuration()))
+                .filter(this::claim)
+                .forEach(this::processOutbox);
     }
 
     private void processOutbox(Outbox outbox) {
-        Span childSpan = null;
-
         try {
-            TraceContext parentContext = buildParentContext(outbox);
-
-            childSpan = tracer.spanBuilder()
-                    .setParent(parentContext)
-                    .name("outbox.process")
-                    .start();
-
-            try (var scope = tracer.withSpan(childSpan)) {
-                outboxProducerClient.sendMessageWithKey(
-                        StringUtils.EMPTY,
-                        outbox.getPayloadType(),
-                        StreamingCommand.of(outbox.getPayload()));
-
-                updateOutboxAfterSuccess(outbox, childSpan);
-            }
-
+            outboxProducerClient.sendMessageWithKey(
+                    "booking-" + outbox.getRequestMessageId(),
+                    outbox.getPayloadType(),
+                    StreamingCommand.of(outbox.getPayload())).join();
+            outboxRepository.changeStatusIfCurrent(outbox.getId(), IN_PROGRESS, SUCCESS);
         } catch (Exception e) {
-            if (childSpan != null) {
-                childSpan.error(e);
-            }
-
             log.error("Error while processing outbox id={}", outbox.getId(), e);
-            updateOutboxAfterError(outbox);
-
+            outboxRepository.changeStatusIfCurrent(outbox.getId(), IN_PROGRESS, ERROR);
         } finally {
-            if (childSpan != null) {
-                childSpan.end();
-            }
+            outboxLeaseCache.release(outbox.getId());
         }
     }
 
-    @Override
-    public void startProcessUpdateStatusInCash() {
-        if (OutboxCache.size() > 0) {
-            OutboxCache.getAll().keySet().forEach(key -> {
-                outboxRepository.findByRequestMessageId(key)
-                        .ifPresentOrElse(outbox -> {
-                            if (outbox.getStatus() == PROCESSING)
-                                commandOutboxFactory.updateStatusOutbox(outbox, OutboxCache.get(key));
-                            OutboxCache.remove(key);
-                        }, () -> {
-                            OutboxCache.remove(key);
-                        });
-            });
-        }
-
+    private boolean claim(Outbox outbox) {
+        return outboxRepository.changeStatusIfCurrent(outbox.getId(), NEW, IN_PROGRESS) == 1;
     }
 
-    private TraceContext buildParentContext(Outbox outbox) {
-        return tracer.traceContextBuilder()
-                .traceId(outbox.getTraceId())
-                .spanId(outbox.getSpanId())
-                .sampled(true)
-                .build();
-    }
-
-    private void updateOutboxAfterSuccess(Outbox outbox, Span childSpan) {
-        outbox.setTraceId(childSpan.context().traceId());
-        outbox.setSpanId(childSpan.context().spanId());
-        commandOutboxFactory.updateStatusOutbox(outbox, PROCESSING);
-    }
-
-    private void updateOutboxAfterError(Outbox outbox) {
-        commandOutboxFactory.updateStatusOutbox(outbox, PENDING);
-    }
-
-    private boolean isTimeoutExceeded(Outbox outbox) {
-        return outbox.getRetryCount() >= DEFAULT_TIMEOUT_RETRY_COUNT;
-    }
-
-    private void handleTimeout(Outbox outbox) {
-        log.error(TIMEOUT_ERROR_MESSAGE, outbox.getRequestMessageId());
-        commandOutboxFactory.updateStatusOutbox(outbox, TIMEOUT);
+    private Duration effectiveLeaseDuration() {
+        return leaseDuration == null ? Duration.ofSeconds(30) : leaseDuration;
     }
 
 }

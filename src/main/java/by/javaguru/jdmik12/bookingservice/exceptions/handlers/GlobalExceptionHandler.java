@@ -43,15 +43,6 @@ public class GlobalExceptionHandler {
                 ZonedDateTime.now().withZoneSameInstant(ZoneId.of(EUROPE_MINSK)));
     }
 
-    @ExceptionHandler({ResponseStatusException.class})
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    public ErrorResponse handleUnavailableRequest(ResponseStatusException exception) {
-        return new ErrorResponse(
-                HttpStatus.SERVICE_UNAVAILABLE.value(),
-                exception.getMessage(),
-                ZonedDateTime.now().withZoneSameInstant(ZoneId.of(EUROPE_MINSK)));
-    }
-
     @ExceptionHandler({ServiceIntegrationException.class})
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleAccountingRequest(ServiceIntegrationException exception) {

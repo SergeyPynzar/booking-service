@@ -3,6 +3,7 @@ package by.javaguru.jdmik12.bookingservice.service.impl;
 import by.javaguru.jdmik12.bookingservice.mapper.BookingMapper;
 import by.javaguru.jdmik12.bookingservice.dto.BookingRequest;
 import by.javaguru.jdmik12.bookingservice.dto.enums.BookingStatus;
+import by.javaguru.jdmik12.bookingservice.exceptions.ForbiddenException;
 import by.javaguru.jdmik12.bookingservice.exceptions.DataIntegrationNotFoundException;
 import by.javaguru.jdmik12.bookingservice.exceptions.ServiceIntegrationException;
 import by.javaguru.jdmik12.bookingservice.dto.BookingResponseDto;
@@ -17,7 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
-import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.PENDING;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.NEW;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +30,7 @@ public class BookingServiceImpl implements BookingService {
     private final CommandOutboxFactory commandOutboxFactory;
 
     @Override
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public ResponseDto createBooking(BookingRequest bookingRequest) {
         return Optional.ofNullable(bookingRequest)
                 .map(this::convertAndSaveRequest)
@@ -47,7 +48,7 @@ public class BookingServiceImpl implements BookingService {
 
     private ResponseDto saveRequestOutbox(Bookings request) {
         try {
-            commandOutboxFactory.buildBookingCommandOutbox(request, PENDING);
+            commandOutboxFactory.buildBookingCommandOutbox(request, NEW);
             return new ResponseDto(request.getId(), DEFAULT_REQUEST_MESSAGE);
         } catch (Exception exception) {
             log.error("Ошибка отправки сообщения о бронировании для заявки ID: {}", request.getId(), exception);
@@ -56,18 +57,25 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "transactionManager", readOnly = true)
     public BookingResponseDto getBookingByRequestId(Long requestId) {
         return bookingMapper.toDto(bookingRepository
                 .findById(requestId).orElseThrow(DataIntegrationNotFoundException::new));
     }
 
     @Override
-    @Transactional
+    @Transactional(transactionManager = "transactionManager")
     public BookingResponseDto updateBookingByRequestId(Long requestId, BookingRequestStatusUpdateDto bookingRequestStatusUpdateDto) {
         Bookings bookings = bookingRepository
                 .findById(requestId).orElseThrow(DataIntegrationNotFoundException::new);
-        bookings.setStatus(bookingRequestStatusUpdateDto.status().name());
+        BookingStatus currentStatus = BookingStatus.valueOf(bookings.getStatus());
+        BookingStatus targetStatus = bookingRequestStatusUpdateDto.status();
+
+        if (!currentStatus.canTransitionTo(targetStatus)) {
+            throw new ForbiddenException("Недопустимый переход статуса: %s -> %s"
+                    .formatted(currentStatus, targetStatus));
+        }
+        bookings.setStatus(targetStatus.name());
 
         return bookingMapper.toDto(bookingRepository.save(bookings));
     }
