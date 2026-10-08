@@ -13,7 +13,7 @@
 - Получение `CheckSecurityEvent`: успешная проверка переводит бронь в `PENDING`, неуспешная — в `SECURITY_FAILED` и публикует notification-команду.
 - OpenAPI/Swagger, Actuator health и централизованные HTTP-ошибки.
 
-Внешние consumers для проверки безопасности и отправки уведомлений не входят в этот репозиторий. Без security consumer бронь останется в `CREATED` после создания — это ожидаемое поведение интеграции.
+Проверку выполняет отдельный публичный сервис [booking-security](https://github.com/SergeyPynzar/booking-security). Он читает `CheckSecurityCommand` из `jdmik12.security.check.command`, проверяет положительность `userId` и `roomId`, затем публикует `CheckSecurityEvent` в `jdmik12.booking-pr.event`. Consumer уведомлений пока является внешней интеграцией. Пока security consumer не запущен, бронь останется в `CREATED` — это ожидаемое поведение.
 
 ## Стек
 
