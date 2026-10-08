@@ -31,8 +31,8 @@ public interface OutboxMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "traceId", ignore = true)
     @Mapping(target = "spanId", ignore = true)
-    @Mapping(target = "retryCount", source = "retryCount", qualifiedByName = "updateRetryCount")
+    @Mapping(target = "retryCount", ignore = true)
     @Mapping(target = "processedAt", expression = "java(java.time.Instant.now())")
     @Mapping(target = "status", source = "outboxStatus")
-    void toOutboxUpdate(@MappingTarget Outbox outbox, Integer retryCount, OutboxStatus outboxStatus);
+    void toOutboxUpdate(@MappingTarget Outbox outbox, OutboxStatus outboxStatus);
 }

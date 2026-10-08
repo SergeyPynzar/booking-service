@@ -1,9 +1,9 @@
-FROM eclipse-temurin:17-jre-alpine AS layers
+FROM eclipse-temurin:21-jre-alpine AS layers
 WORKDIR /layers
 COPY target/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /workspace
 COPY --from=layers /layers/dependencies/ ./
 COPY --from=layers /layers/snapshot-dependencies/ ./

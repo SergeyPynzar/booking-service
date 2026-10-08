@@ -90,9 +90,10 @@ k8s-deploy:
       --insecure-skip-tls-verify=true
       --token=$KUBE_TOKEN
   script:
-    - sed -i "s|\${PACKAGE_VERSION}|${PACKAGE_VERSION}|g" k8s/deployment.yml
+    - export IMAGE_REFERENCE="${REPO_DOCKER_IP}/${DOCKER_REPO_REL}/${GROUP_NAME}/${CI_PROJECT_NAME}:${PACKAGE_VERSION}"
     - kubectl get namespace $KUBE_NAMESPACE $KUBECTL_CLI_OPTS || kubectl create namespace $KUBE_NAMESPACE $KUBECTL_CLI_OPTS
-    - kubectl ${KUBECTL_CLI_OPTS} apply -f ./k8s/ -n $KUBE_NAMESPACE
+    - kubectl ${KUBECTL_CLI_OPTS} apply -f k8s/configMap.yml -f k8s/secret.yml -f k8s/service.yml -f k8s/ingress.yml -n $KUBE_NAMESPACE
+    - sed "s|\${IMAGE_REFERENCE}|${IMAGE_REFERENCE}|g" k8s/deployment.yml | kubectl ${KUBECTL_CLI_OPTS} apply -f - -n $KUBE_NAMESPACE
   rules:
     - if: $CI_COMMIT_BRANCH == 'main' && $CI_PIPELINE_SOURCE == 'push'
   needs:

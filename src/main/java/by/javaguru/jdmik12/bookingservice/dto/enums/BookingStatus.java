@@ -30,6 +30,20 @@ public enum BookingStatus {
     }
 
     public boolean isTerminal() {
-        return this == CHECKED_OUT || this == CANCELLED || this == NO_SHOW;
+        return this == CHECKED_OUT || this == CANCELLED || this == NO_SHOW || this == SECURITY_FAILED;
+    }
+
+    public boolean canTransitionTo(BookingStatus target) {
+        if (this == target) {
+            return true;
+        }
+
+        return switch (this) {
+            case CREATED -> target == PENDING || target == SECURITY_FAILED;
+            case PENDING -> target == CONFIRMED || target == CANCELLED || target == NO_SHOW;
+            case CONFIRMED -> target == CHECKED_IN || target == CANCELLED || target == NO_SHOW;
+            case CHECKED_IN -> target == CHECKED_OUT;
+            case CHECKED_OUT, CANCELLED, SECURITY_FAILED, NO_SHOW -> false;
+        };
     }
 }

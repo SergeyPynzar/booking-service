@@ -4,6 +4,7 @@ import by.javaguru.jdmik12.bookingservice.dto.BookingRequest;
 import by.javaguru.jdmik12.bookingservice.dto.BookingRequestStatusUpdateDto;
 import by.javaguru.jdmik12.bookingservice.dto.enums.BookingStatus;
 import by.javaguru.jdmik12.bookingservice.exceptions.DataIntegrationNotFoundException;
+import by.javaguru.jdmik12.bookingservice.exceptions.ForbiddenException;
 import by.javaguru.jdmik12.bookingservice.mapper.BookingMapper;
 import by.javaguru.jdmik12.bookingservice.model.Bookings;
 import by.javaguru.jdmik12.bookingservice.outbox.impl.factory.BookingCommandOutboxFactory;
@@ -18,7 +19,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
-import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.PENDING;
+import static by.javaguru.jdmik12.bookingservice.dto.enums.OutboxStatus.NEW;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,7 +60,7 @@ class BookingServiceImplTest {
         var response = bookingService.createBooking(request);
 
         assertThat(response.id()).isEqualTo(42L);
-        verify(commandOutboxFactory).buildBookingCommandOutbox(entity, PENDING);
+        verify(commandOutboxFactory).buildBookingCommandOutbox(entity, NEW);
     }
 
     @Test
@@ -74,7 +75,7 @@ class BookingServiceImplTest {
     void updateBookingByRequestId_updatesStatus() {
         Bookings entity = new Bookings();
         entity.setId(1L);
-        entity.setStatus(BookingStatus.CREATED.name());
+        entity.setStatus(BookingStatus.PENDING.name());
 
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(entity));
         when(bookingRepository.save(entity)).thenReturn(entity);
@@ -94,5 +95,16 @@ class BookingServiceImplTest {
         assertThat(entity.getStatus()).isEqualTo(BookingStatus.CONFIRMED.name());
         assertThat(result.status()).isEqualTo(BookingStatus.CONFIRMED);
         verify(bookingRepository).save(entity);
+    }
+
+    @Test
+    void updateBookingByRequestId_rejectsInvalidStatusTransition() {
+        Bookings entity = new Bookings();
+        entity.setStatus(BookingStatus.CREATED.name());
+        when(bookingRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> bookingService.updateBookingByRequestId(
+                1L, new BookingRequestStatusUpdateDto(BookingStatus.CHECKED_OUT)))
+                .isInstanceOf(ForbiddenException.class);
     }
 }
