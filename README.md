@@ -105,4 +105,4 @@ docker build -t booking-service:local .
 
 ## Конфигурация и доставка
 
-Локальные параметры находятся в [`.env.sample`](.env.sample), основная Spring-конфигурация — в [`application.yaml`](src/main/resources/application.yaml). Kubernetes-манифесты лежат в [`k8s/`](k8s/), GitLab pipeline — в [`.gitlab-ci.yml`](.gitlab-ci.yml). Перед применением `k8s/secret.yml` задайте реальные реквизиты БД через защищённый механизм CI/CD или секреты кластера.
+Локальные параметры находятся в [`.env.sample`](.env.sample), основная Spring-конфигурация — в [`application.yaml`](src/main/resources/application.yaml). Для локального запуска и проверки сервиса используется [`docker-compose.yml`](docker-compose.yml); реальные секреты остаются в локальном `.env` и не попадают в Git.
